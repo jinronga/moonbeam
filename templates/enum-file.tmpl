@@ -1,0 +1,14 @@
+// 枚举类型定义
+{{- range .Enums }}
+/**
+ * {{ .SchemaName }}
+ */
+export enum {{ .TypeName }} {
+{{- range $index, $value := .EnumValues }}
+{{- if eq $index 0 }}
+  {{ $value }}
+{{- else }},
+  {{ $value }}{{- end }}
+{{- end }}
+}
+{{ end }}

@@ -1,4 +1,18 @@
 // {{ .ModuleName }} 模块接口定义
+{{- if eq .ModuleName "types" }}
+{{- if .UsedEnums }}
+// 导入枚举类型
+import {
+{{- range $index, $enum := .UsedEnums }}
+{{- if eq $index 0 }}
+  {{ $enum }}
+{{- else }},
+  {{ $enum }}{{- end }}
+{{- end }}
+} from './enum.js'
+
+{{- end }}
+{{- end }}
 {{- range $name, $code := .Interfaces }}
 {{ $code }}
 {{- end }}

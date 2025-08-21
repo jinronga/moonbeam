@@ -111,7 +111,10 @@ func main() {
 
 		// 生成接口代码
 		interfaceCode := renderInterface(name, schema, interfaceDefTmpl)
-		interfacesByModule[moduleName][name] = interfaceCode
+		// 只有当接口代码不为空时才添加到映射中
+		if interfaceCode != "" {
+			interfacesByModule[moduleName][name] = interfaceCode
+		}
 	}
 
 	// 处理所有API路径
@@ -210,9 +213,15 @@ func main() {
 		}
 
 		// 生成接口文件
+		var usedEnums []string
+		if moduleName == "types" {
+			usedEnums = extractUsedEnums(interfaces)
+		}
+
 		interfaceData := InterfaceFileData{
 			ModuleName: moduleName,
 			Interfaces: interfaces,
+			UsedEnums:  usedEnums,
 		}
 
 		var buf bytes.Buffer
@@ -230,6 +239,72 @@ func main() {
 			log.Printf("write interface file failed %s: %v", filename, err)
 		} else {
 			fmt.Printf("✅ generate interface file: %s\n", filename)
+		}
+	}
+
+	// 生成枚举文件
+	if len(api.Components.Schemas) > 0 {
+		// 收集所有枚举
+		var allEnums []EnumData
+		for name, schema := range api.Components.Schemas {
+			if len(schema.Enum) > 0 {
+				enumValues := make([]string, 0, len(schema.Enum))
+				for _, value := range schema.Enum {
+					if str, ok := value.(string); ok {
+						enumValues = append(enumValues, str)
+					}
+				}
+
+				typeName := cleanRef("#/" + name)
+				// 清理命名空间前缀
+				if strings.Contains(typeName, ".") {
+					parts := strings.Split(typeName, ".")
+					typeName = parts[len(parts)-1]
+				}
+
+				// 检查是否为带前缀的枚举类型，如果是则映射到真正的枚举类型
+				if strings.Contains(typeName, "_") {
+					parts := strings.Split(typeName, "_")
+					lastPart := parts[len(parts)-1]
+					// 检查最后一部分是否为已知的枚举类型
+					if isEnumType(lastPart) {
+						typeName = lastPart
+					}
+				}
+
+				enumData := EnumData{
+					SchemaName: name,
+					TypeName:   typeName,
+					EnumValues: enumValues,
+				}
+				allEnums = append(allEnums, enumData)
+			}
+		}
+
+		// 生成枚举文件
+		if len(allEnums) > 0 {
+			enumFileData := struct {
+				Enums []EnumData
+			}{
+				Enums: allEnums,
+			}
+
+			enumFileTmpl, err := template.ParseFS(templateFS, "templates/enum-file.tmpl")
+			if err == nil {
+				var buf bytes.Buffer
+				err = enumFileTmpl.Execute(&buf, enumFileData)
+				if err == nil {
+					typesDir := filepath.Join(outputDir, "types")
+					err := os.MkdirAll(typesDir, 0755)
+					if err == nil {
+						filename := filepath.Join(outputDir, "types", "enum.ts")
+						err = ioutil.WriteFile(filename, buf.Bytes(), 0644)
+						if err == nil {
+							fmt.Printf("✅ generate enum file: %s\n", filename)
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -310,9 +385,16 @@ type FunctionData struct {
 	Path         string
 }
 
+type EnumData struct {
+	SchemaName string
+	TypeName   string
+	EnumValues []string
+}
+
 type InterfaceFileData struct {
 	ModuleName string
 	Interfaces map[string]string
+	UsedEnums  []string
 }
 
 type FileData struct {
@@ -341,28 +423,20 @@ func renderInterface(schemaName string, schema Schema, tmpl *template.Template) 
 
 	var buf bytes.Buffer
 
+	// 检查是否为枚举类型
+	if len(schema.Enum) > 0 {
+		// 枚举类型将在单独的enum.ts文件中生成，这里返回空字符串
+		return ""
+	}
+
 	// 确保Properties不为nil
 	properties := schema.Properties
 	if properties == nil {
 		properties = make(map[string]Property)
 	}
 
-	// 创建新的Properties映射，处理类型名称
-	cleanProperties := make(map[string]Property)
-	for key, prop := range properties {
-		// 复制属性，但清理类型名称
-		cleanProp := prop
-		if prop.Ref != "" {
-			// 清理引用类型名称
-			cleanTypeName := cleanRef(prop.Ref)
-			if strings.Contains(cleanTypeName, ".") {
-				parts := strings.Split(cleanTypeName, ".")
-				cleanTypeName = parts[len(parts)-1]
-			}
-			cleanProp.Ref = cleanTypeName
-		}
-		cleanProperties[key] = cleanProp
-	}
+	// 直接使用原始的Properties，让Property.TypeName()方法处理类型名称映射
+	cleanProperties := properties
 
 	data := struct {
 		SchemaName string
@@ -486,6 +560,76 @@ func generateImports(moduleName string, interfacesByModule map[string]map[string
 }
 
 // extractUsedTypes 从函数代码中提取使用的类型名称
+// extractUsedEnums 从接口代码中提取使用的枚举类型
+func extractUsedEnums(interfaces map[string]string) []string {
+	// 定义枚举类型名称到实际枚举类型的映射
+	enumMappings := map[string]string{
+		"AlertStatus":            "AlertStatus",
+		"ConditionMetric":        "ConditionMetric",
+		"DatasourceDriverMetric": "DatasourceDriverMetric",
+		"DatasourceType":         "DatasourceType",
+		"DictType":               "DictType",
+		"Environment":            "Environment",
+		"Gender":                 "Gender",
+		"GlobalStatus":           "GlobalStatus",
+		"HTTPMethod":             "HTTPMethod",
+		"HookAPP":                "HookAPP",
+		"MenuProcessType":        "MenuProcessType",
+		"KnownRegex":             "KnownRegex",
+		"OperateType":            "OperateType",
+		"Network":                "Network",
+		"I18nFormat":             "I18nFormat",
+		"MemberPosition":         "MemberPosition",
+		"MenuCategory":           "MenuCategory",
+		"TeamAuditStatus":        "TeamAuditStatus",
+		"NoticeType":             "NoticeType",
+		"SMSProviderType":        "SMSProviderType",
+		"MenuType":               "MenuType",
+		"StrategyType":           "StrategyType",
+		"UserStatus":             "UserStatus",
+		"RegistryDriver":         "RegistryDriver",
+		"SampleMode":             "SampleMode",
+		"SendMessageStatus":      "SendMessageStatus",
+		"TeamAuditAction":        "TeamAuditAction",
+		"TimeEngineRuleType":     "TimeEngineRuleType",
+		"MessageType":            "MessageType",
+		"TeamStatus":             "TeamStatus",
+		"UserPosition":           "UserPosition",
+		"MemberStatus":           "MemberStatus",
+		"ServerType":             "ServerType",
+	}
+
+	usedEnums := make(map[string]bool)
+
+	// 遍历所有接口代码，查找使用的枚举
+	for _, code := range interfaces {
+		for _, enumName := range enumMappings {
+			// 使用简单的字符串包含检查，查找包含枚举名称的类型
+			// 这样可以匹配到如 AlertItem_AlertStatus 这样的类型名称
+			if strings.Contains(code, enumName) {
+				usedEnums[enumName] = true
+			}
+		}
+	}
+
+	// 转换为切片并排序
+	var result []string
+	for enumName := range usedEnums {
+		result = append(result, enumName)
+	}
+
+	// 简单排序
+	for i := 0; i < len(result)-1; i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[i] > result[j] {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	return result
+}
+
 func extractUsedTypes(funcCode string, usedInterfaces map[string]bool) {
 	// 提取参数类型：@param { TypeName } params
 	paramPattern := `@param\s*\{\s*([^}]+)\s*\}\s*params`
