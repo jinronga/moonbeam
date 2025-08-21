@@ -24,12 +24,14 @@ var (
 	outputDir string
 	apiFile   string
 	version   bool
+	force     bool
 )
 
 func init() {
 	flag.StringVar(&outputDir, "o", path.Join("output", fmt.Sprintf("api-%d", time.Now().Unix())), "Output directory")
 	flag.StringVar(&apiFile, "f", "openapi.yaml", "API file")
 	flag.BoolVar(&version, "v", false, "Version")
+	flag.BoolVar(&force, "force", false, "Force overwrite output directory; default is false; if true, the output directory will be overwritten")
 }
 
 func main() {
@@ -50,7 +52,9 @@ func main() {
 		fmt.Printf("❌ failed to parse OpenAPI: %v\n", err)
 		log.Fatal(err)
 	}
-	os.RemoveAll(outputDir)
+	if force {
+		os.RemoveAll(outputDir)
+	}
 	// 创建输出目录
 	err = os.MkdirAll(outputDir, 0755)
 	if err != nil {
