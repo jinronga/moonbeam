@@ -35,7 +35,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if version {
-		fmt.Printf("moonbeam version %s\n", "v0.0.1")
+		fmt.Printf("moonbeam version %s\n", "v0.0.2")
 		os.Exit(0)
 	}
 	// 读取上传的文件内容
