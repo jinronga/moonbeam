@@ -16,6 +16,36 @@ moonbeam -f openapi.yaml -o ./api
 
 ## Usage
 
-![image1](./docs/1.png)
+```yaml
+# openapi.yaml
+openapi: 3.0.0
+info:
+  title: Test API
+  version: 1.0.0
+paths:
+  /test:
+    get:
+      operationId: test_get
+      tags: [test]
+      summary: Test endpoint
+      responses:
+        '200':
+          description: OK
+components:
+  schemas:
+    TestResponse:
+      type: object
+      properties:
+        message:
+          type: string
+```
 
-![image2](./docs/2.png)
+```bash
+moonbeam -f openapi.yaml -o ./api
+```
+
+## Output
+
+```bash
+tree -L 2 -a ./api
+```

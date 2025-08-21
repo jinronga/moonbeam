@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,9 @@ import (
 	"text/template"
 	"time"
 )
+
+//go:embed templates/*.tmpl
+var templateFS embed.FS
 
 var (
 	outputDir string
@@ -55,11 +59,35 @@ func main() {
 	}
 
 	// 加载模板
-	interfaceDefTmpl := template.Must(template.ParseFiles("templates/interface-definition.tmpl"))
-	interfaceTmpl := template.Must(template.ParseFiles("templates/interface.tmpl"))
-	functionTmpl := template.Must(template.ParseFiles("templates/function.tmpl"))
-	fileTmpl := template.Must(template.ParseFiles("templates/file.tmpl"))
-	indexTmpl := template.Must(template.ParseFiles("templates/index.tmpl"))
+	interfaceDefTmpl, err := template.ParseFS(templateFS, "templates/interface-definition.tmpl")
+	if err != nil {
+		fmt.Printf("❌ failed to parse interface-definition template: %v\n", err)
+		log.Fatal(err)
+	}
+
+	interfaceTmpl, err := template.ParseFS(templateFS, "templates/interface.tmpl")
+	if err != nil {
+		fmt.Printf("❌ failed to parse interface template: %v\n", err)
+		log.Fatal(err)
+	}
+
+	functionTmpl, err := template.ParseFS(templateFS, "templates/function.tmpl")
+	if err != nil {
+		fmt.Printf("❌ failed to parse function template: %v\n", err)
+		log.Fatal(err)
+	}
+
+	fileTmpl, err := template.ParseFS(templateFS, "templates/file.tmpl")
+	if err != nil {
+		fmt.Printf("❌ failed to parse file template: %v\n", err)
+		log.Fatal(err)
+	}
+
+	indexTmpl, err := template.ParseFS(templateFS, "templates/index.tmpl")
+	if err != nil {
+		fmt.Printf("❌ failed to parse index template: %v\n", err)
+		log.Fatal(err)
+	}
 
 	// 按模块组织数据
 	modules := make(map[string]*ModuleData)
