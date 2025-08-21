@@ -16,31 +16,42 @@ import (
 	"time"
 )
 
-var outputDir string
-var apiFile string
+var (
+	outputDir string
+	apiFile   string
+	version   bool
+)
 
 func init() {
 	flag.StringVar(&outputDir, "o", path.Join("output", fmt.Sprintf("api-%d", time.Now().Unix())), "Output directory")
 	flag.StringVar(&apiFile, "f", "openapi.yaml", "API file")
+	flag.BoolVar(&version, "v", false, "Version")
 }
 
 func main() {
 	flag.Parse()
+	if version {
+		fmt.Printf("moonbeam version %s\n", "v0.0.1")
+		os.Exit(0)
+	}
 	// 读取上传的文件内容
 	data, err := os.ReadFile(apiFile)
 	if err != nil {
+		fmt.Printf("❌ failed to read API file: %v\n", err)
 		log.Fatal(err)
 	}
 
 	api, err := ParseOpenAPI(data)
 	if err != nil {
+		fmt.Printf("❌ failed to parse OpenAPI: %v\n", err)
 		log.Fatal(err)
 	}
 	os.RemoveAll(outputDir)
 	// 创建输出目录
 	err = os.MkdirAll(outputDir, 0755)
 	if err != nil {
-		log.Fatal("创建输出目录失败:", err)
+		fmt.Printf("❌ create output directory failed: %v\n", err)
+		log.Fatal("create output directory failed:", err)
 	}
 
 	// 加载模板
@@ -161,7 +172,8 @@ func main() {
 		moduleDir := filepath.Join(outputDir, moduleName)
 		err := os.MkdirAll(moduleDir, 0755)
 		if err != nil {
-			log.Printf("创建模块目录失败 %s: %v", moduleName, err)
+			fmt.Printf("❌ create module directory failed %s: %v\n", moduleName, err)
+			log.Printf("create module directory failed %s: %v", moduleName, err)
 			continue
 		}
 
@@ -174,16 +186,18 @@ func main() {
 		var buf bytes.Buffer
 		err = interfaceTmpl.Execute(&buf, interfaceData)
 		if err != nil {
-			log.Printf("接口模板执行失败 %s: %v", moduleName, err)
+			fmt.Printf("❌ interface template execution failed %s: %v\n", moduleName, err)
+			log.Printf("interface template execution failed %s: %v", moduleName, err)
 			continue
 		}
 
 		filename := filepath.Join(moduleDir, "index.ts")
 		err = ioutil.WriteFile(filename, buf.Bytes(), 0644)
 		if err != nil {
-			log.Printf("写入接口文件失败 %s: %v", filename, err)
+			fmt.Printf("❌ write interface file failed %s: %v\n", filename, err)
+			log.Printf("write interface file failed %s: %v", filename, err)
 		} else {
-			fmt.Printf("✅ 生成接口文件: %s\n", filename)
+			fmt.Printf("✅ generate interface file: %s\n", filename)
 		}
 	}
 
@@ -197,7 +211,8 @@ func main() {
 		moduleDir := filepath.Join(outputDir, name)
 		err := os.MkdirAll(moduleDir, 0755)
 		if err != nil {
-			log.Printf("创建模块目录失败 %s: %v", name, err)
+			fmt.Printf("❌ create module directory failed %s: %v\n", name, err)
+			log.Printf("create module directory failed %s: %v", name, err)
 			continue
 		}
 
@@ -211,16 +226,18 @@ func main() {
 		var buf bytes.Buffer
 		err = fileTmpl.Execute(&buf, fileData)
 		if err != nil {
-			log.Printf("模板执行失败 %s: %v", name, err)
+			fmt.Printf("❌ template execution failed %s: %v\n", name, err)
+			log.Printf("template execution failed %s: %v", name, err)
 			continue
 		}
 
 		filename := filepath.Join(moduleDir, "index.ts")
 		err = ioutil.WriteFile(filename, buf.Bytes(), 0644)
 		if err != nil {
-			log.Printf("写入文件失败 %s: %v", filename, err)
+			fmt.Printf("❌ write file failed %s: %v\n", filename, err)
+			log.Printf("write file failed %s: %v", filename, err)
 		} else {
-			fmt.Printf("✅ 生成模块文件: %s\n", filename)
+			fmt.Printf("✅ generate module file: %s\n", filename)
 		}
 	}
 
@@ -232,14 +249,16 @@ func main() {
 	var buf bytes.Buffer
 	err = indexTmpl.Execute(&buf, rootIndexData)
 	if err != nil {
-		log.Printf("根索引模板执行失败: %v", err)
+		fmt.Printf("❌ root index template execution failed: %v\n", err)
+		log.Printf("root index template execution failed: %v", err)
 	} else {
 		filename := filepath.Join(outputDir, "index.ts")
 		err = ioutil.WriteFile(filename, buf.Bytes(), 0644)
 		if err != nil {
-			log.Printf("写入根索引文件失败: %v", err)
+			fmt.Printf("❌ write root index file failed: %v\n", err)
+			log.Printf("write root index file failed: %v", err)
 		} else {
-			fmt.Printf("✅ 生成根索引文件: %s\n", filename)
+			fmt.Printf("✅ generate root index file: %s\n", filename)
 		}
 	}
 }
@@ -351,7 +370,11 @@ func renderFunction(data FunctionData, tmpl *template.Template) string {
 	}
 
 	var buf bytes.Buffer
-	tmpl.Execute(&buf, newData)
+	err := tmpl.Execute(&buf, newData)
+	if err != nil {
+		fmt.Printf("❌ failed to execute function template for %s: %v\n", data.FunctionName, err)
+		log.Printf("failed to execute function template for %s: %v", data.FunctionName, err)
+	}
 	return buf.String()
 }
 
