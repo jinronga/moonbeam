@@ -1,9 +1,27 @@
 // {{ .ModuleName }} 模块API函数
 {{- range .Imports }}
 {{- if eq .Module $.ModuleName }}
+{{- if gt (len .Interfaces) 4 }}
+import {
+{{- range $index, $interface := .Interfaces }}{{- if $index }},
+{{- end }}
+  {{ $interface }}
+{{- end }}
+} from './index.js'
+{{- else }}
 import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from './index.js'
+{{- end }}
+{{- else }}
+{{- if gt (len .Interfaces) 4 }}
+import {
+{{- range $index, $interface := .Interfaces }}{{- if $index }},
+{{- end }}
+  {{ $interface }}
+{{- end }}
+} from '../{{ .Module }}/index.js'
 {{- else }}
 import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from '../{{ .Module }}/index.js'
+{{- end }}
 {{- end }}
 {{- end }}
 import { request } from '../index.js'

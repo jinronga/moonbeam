@@ -3,6 +3,13 @@
  * @param { {{ .ParamType }} } params
  * @returns {Promise<{{ .ResponseType }}>}
  */
+{{- $fullLine := printf "export function %s(params: %s): Promise<%s> {" .FunctionName .ParamType .ResponseType }}
+{{- if gt (len $fullLine) 120 }}
+export function {{ .FunctionName }}(
+  params: {{ .ParamType }}
+): Promise<{{ .ResponseType }}> {
+{{- else }}
 export function {{ .FunctionName }}(params: {{ .ParamType }}): Promise<{{ .ResponseType }}> {
+{{- end }}
   return request.{{ .Method }}<{{ .ResponseType }}>('{{ .Path }}', params)
 }
