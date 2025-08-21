@@ -1,4 +1,6 @@
-# ts-generator
+# moonbeam
+
+moonbeam is a tool to generate API client code from OpenAPI specification.
 
 ## Install
 
