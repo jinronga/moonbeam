@@ -1,11 +1,19 @@
+{{- if ne .SchemaName "" }}
 /**
  * {{ .SchemaName }}
  */
+{{- end }}
+{{- if .Properties }}
 export interface {{ .TypeName }} {
 {{- range $key, $prop := .Properties }}
+  {{- if ne $prop.Description "" }}
   /**
    * {{ $prop.Description }}
    */
+  {{- end }}
   {{ $key }}{{ if not $prop.IsRequired }}?{{ end }}: {{ $prop.TypeName }}
 {{- end }}
 }
+{{- else }}
+export interface {{ .TypeName }} {}
+{{- end }}
