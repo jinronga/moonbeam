@@ -15,9 +15,10 @@ type OpenAPI struct {
 }
 
 type PathItem struct {
-	Post *Operation `yaml:"post"`
-	Get  *Operation `yaml:"get"`
-	Put  *Operation `yaml:"put"`
+	Post   *Operation `yaml:"post"`
+	Get    *Operation `yaml:"get"`
+	Put    *Operation `yaml:"put"`
+	Delete *Operation `yaml:"delete"`
 }
 
 type Operation struct {

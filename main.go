@@ -20,8 +20,8 @@ var outputDir string
 var apiFile string
 
 func init() {
-	flag.StringVar(&outputDir, "output", "output", "Output directory")
-	flag.StringVar(&apiFile, "api", "api.yaml", "API file")
+	flag.StringVar(&outputDir, "o", path.Join("output", fmt.Sprintf("api-%d", time.Now().Unix())), "Output directory")
+	flag.StringVar(&apiFile, "f", "openapi.yaml", "API file")
 }
 
 func main() {
@@ -36,7 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	outputDir = path.Join(outputDir, fmt.Sprintf("api-%d", time.Now().Unix()))
+	os.RemoveAll(outputDir)
 	// 创建输出目录
 	err = os.MkdirAll(outputDir, 0755)
 	if err != nil {
@@ -72,6 +72,8 @@ func main() {
 	}
 
 	// 处理所有API路径
+	processedFunctions := make(map[string]bool) // 用于去重
+
 	for path, pathItem := range api.Paths {
 		var op *Operation
 		var method string
@@ -84,6 +86,9 @@ func main() {
 		} else if pathItem.Put != nil {
 			op = pathItem.Put
 			method = "PUT"
+		} else if pathItem.Delete != nil {
+			op = pathItem.Delete
+			method = "DELETE"
 		} else {
 			continue
 		}
@@ -124,6 +129,15 @@ func main() {
 
 		fnName := toCamel(strings.Split(op.OperationID, "_")[1])
 		fnName = strings.ToLower(fnName[:1]) + fnName[1:]
+
+		// 创建唯一标识符，用于去重
+		uniqueKey := fmt.Sprintf("%s_%s_%s", moduleName, fnName, method)
+
+		// 如果已经处理过这个函数，跳过
+		if processedFunctions[uniqueKey] {
+			continue
+		}
+		processedFunctions[uniqueKey] = true
 
 		funcCode := renderFunction(FunctionData{
 			Summary:      summary,
@@ -201,12 +215,12 @@ func main() {
 			continue
 		}
 
-		filename := filepath.Join(moduleDir, "api.ts")
+		filename := filepath.Join(moduleDir, "index.ts")
 		err = ioutil.WriteFile(filename, buf.Bytes(), 0644)
 		if err != nil {
 			log.Printf("写入文件失败 %s: %v", filename, err)
 		} else {
-			fmt.Printf("✅ 生成API文件: %s\n", filename)
+			fmt.Printf("✅ 生成模块文件: %s\n", filename)
 		}
 	}
 
@@ -393,12 +407,17 @@ func generateImports(moduleName string, interfacesByModule map[string]map[string
 	// 对于API模块，只导入实际使用的接口
 	if moduleName != "types" {
 		if interfaces, exists := allInterfaces["types"]; exists {
+			// 使用 map 来去重接口名称
+			uniqueInterfaces := make(map[string]bool)
 			var neededInterfaces []string
+
 			for _, cleanName := range interfaces {
-				if usedInterfaces[cleanName] {
+				if usedInterfaces[cleanName] && !uniqueInterfaces[cleanName] {
+					uniqueInterfaces[cleanName] = true
 					neededInterfaces = append(neededInterfaces, cleanName)
 				}
 			}
+
 			if len(neededInterfaces) > 0 {
 				imports = append(imports, ImportData{
 					Module:     "types",

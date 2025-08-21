@@ -1,4 +1,4 @@
-module ts-generator
+module github.com/aide-family/moonbeam
 
 go 1.24
 
