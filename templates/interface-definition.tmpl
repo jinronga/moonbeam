@@ -1,0 +1,11 @@
+/**
+ * {{ .SchemaName }}
+ */
+export interface {{ .TypeName }} {
+{{- range $key, $prop := .Properties }}
+  /**
+   * {{ $prop.Description }}
+   */
+  {{ $key }}{{ if not $prop.IsRequired }}?{{ end }}: {{ $prop.TypeName }}
+{{- end }}
+}

@@ -1,0 +1,11 @@
+// API 模块导出文件
+
+// 导出所有类型定义
+export * from './types/index.js'
+
+// 导出所有API函数
+{{ range $name, $module := .Modules }}
+{{ if ne $name "types" }}
+export * from './{{ $name }}/api.js'
+{{ end }}
+{{ end }}

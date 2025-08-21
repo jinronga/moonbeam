@@ -1,0 +1,8 @@
+/**
+ * {{ .Summary }}
+ * @param { {{ .ParamType }} } params
+ * @returns {Promise<{{ .ResponseType }}>}
+ */
+export function {{ .FunctionName }}(params: {{ .ParamType }}): Promise<{{ .ResponseType }}> {
+  return request.{{ .Method }}<{{ .ResponseType }}>('{{ .Path }}', params)
+}

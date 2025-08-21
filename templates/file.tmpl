@@ -1,0 +1,12 @@
+// {{ .ModuleName }} 模块API函数
+{{ range .Imports }}
+{{ if eq .Module $.ModuleName }}
+import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from './index.js'
+{{ else }}
+import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from '../{{ .Module }}/index.js'
+{{ end }}
+{{ end }}
+
+{{ range .Functions }}
+{{ . }}
+{{ end }}
