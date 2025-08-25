@@ -9,10 +9,11 @@ import {
 {{- else }},
   {{ $enum }}{{- end }}
 {{- end }}
-} from './enum.js'
+} from './enum.ts'
 
 {{- end }}
 {{- end }}
-{{- range $name, $code := .Interfaces }}
+{{- range .SortedNames }}
+{{- $code := index $.Interfaces . }}
 {{ $code }}
 {{- end }}

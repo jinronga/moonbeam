@@ -7,9 +7,9 @@ import {
 {{- end }}
   {{ $interface }}
 {{- end }}
-} from './index.js'
+} from './index.ts'
 {{- else }}
-import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from './index.js'
+import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from './index.ts'
 {{- end }}
 {{- else }}
 {{- if gt (len .Interfaces) 4 }}
@@ -18,13 +18,13 @@ import {
 {{- end }}
   {{ $interface }}
 {{- end }}
-} from '../{{ .Module }}/index.js'
+} from '../{{ .Module }}/index.ts'
 {{- else }}
-import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from '../{{ .Module }}/index.js'
+import { {{ range $index, $interface := .Interfaces }}{{ if $index }}, {{ end }}{{ $interface }}{{ end }} } from '../{{ .Module }}/index.ts'
 {{- end }}
 {{- end }}
 {{- end }}
-import { request } from '../index.js'
+import { request } from '../index.ts'
 {{ range $index, $func := .Functions }}
 {{- if $index }}
 

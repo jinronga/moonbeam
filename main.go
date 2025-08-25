@@ -12,6 +12,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -218,10 +219,18 @@ func main() {
 			usedEnums = extractUsedEnums(interfaces)
 		}
 
+		// 创建排序后的接口名称列表
+		var sortedNames []string
+		for name := range interfaces {
+			sortedNames = append(sortedNames, name)
+		}
+		sort.Strings(sortedNames)
+
 		interfaceData := InterfaceFileData{
-			ModuleName: moduleName,
-			Interfaces: interfaces,
-			UsedEnums:  usedEnums,
+			ModuleName:  moduleName,
+			Interfaces:  interfaces,
+			UsedEnums:   usedEnums,
+			SortedNames: sortedNames,
 		}
 
 		var buf bytes.Buffer
@@ -272,6 +281,9 @@ func main() {
 					}
 				}
 
+				// 对枚举值进行排序
+				sort.Strings(enumValues)
+
 				enumData := EnumData{
 					SchemaName: name,
 					TypeName:   typeName,
@@ -283,6 +295,11 @@ func main() {
 
 		// 生成枚举文件
 		if len(allEnums) > 0 {
+			// 对枚举按TypeName排序
+			sort.Slice(allEnums, func(i, j int) bool {
+				return allEnums[i].TypeName < allEnums[j].TypeName
+			})
+
 			enumFileData := struct {
 				Enums []EnumData
 			}{
@@ -392,9 +409,10 @@ type EnumData struct {
 }
 
 type InterfaceFileData struct {
-	ModuleName string
-	Interfaces map[string]string
-	UsedEnums  []string
+	ModuleName  string
+	Interfaces  map[string]string
+	UsedEnums   []string
+	SortedNames []string
 }
 
 type FileData struct {
@@ -548,6 +566,8 @@ func generateImports(moduleName string, interfacesByModule map[string]map[string
 			}
 
 			if len(neededInterfaces) > 0 {
+				// 对接口名称进行排序
+				sort.Strings(neededInterfaces)
 				imports = append(imports, ImportData{
 					Module:     "types",
 					Interfaces: neededInterfaces,
@@ -618,14 +638,8 @@ func extractUsedEnums(interfaces map[string]string) []string {
 		result = append(result, enumName)
 	}
 
-	// 简单排序
-	for i := 0; i < len(result)-1; i++ {
-		for j := i + 1; j < len(result); j++ {
-			if result[i] > result[j] {
-				result[i], result[j] = result[j], result[i]
-			}
-		}
-	}
+	// 使用标准库排序
+	sort.Strings(result)
 
 	return result
 }
