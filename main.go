@@ -122,80 +122,82 @@ func main() {
 	processedFunctions := make(map[string]bool) // 用于去重
 
 	for path, pathItem := range api.Paths {
-		var op *Operation
-		var method string
-		if pathItem.Post != nil {
-			op = pathItem.Post
-			method = "POST"
-		} else if pathItem.Get != nil {
-			op = pathItem.Get
-			method = "GET"
-		} else if pathItem.Put != nil {
-			op = pathItem.Put
-			method = "PUT"
-		} else if pathItem.Delete != nil {
-			op = pathItem.Delete
-			method = "DELETE"
-		} else {
-			continue
+		// 处理所有HTTP方法，而不是只处理第一个
+		operations := []struct {
+			op     *Operation
+			method string
+		}{
+			{pathItem.Post, "POST"},
+			{pathItem.Get, "GET"},
+			{pathItem.Put, "PUT"},
+			{pathItem.Delete, "DELETE"},
 		}
 
-		if op.OperationID == "" {
-			continue
-		}
+		for _, opData := range operations {
+			if opData.op == nil {
+				continue
+			}
 
-		moduleName := getModuleName(op.Tags)
-		if _, exists := modules[moduleName]; !exists {
-			modules[moduleName] = &ModuleData{Name: moduleName}
-		}
+			op := opData.op
+			method := opData.method
 
-		paramType := "EmptyRequest"
-		if op.RequestBody != nil {
-			for _, c := range op.RequestBody.Content {
-				if c.Schema.RefValue != "" {
-					paramType = cleanRef(c.Schema.RefValue)
-					break
+			if op.OperationID == "" {
+				continue
+			}
+
+			moduleName := getModuleName(op.Tags)
+			if _, exists := modules[moduleName]; !exists {
+				modules[moduleName] = &ModuleData{Name: moduleName}
+			}
+
+			paramType := "EmptyRequest"
+			if op.RequestBody != nil {
+				for _, c := range op.RequestBody.Content {
+					if c.Schema.RefValue != "" {
+						paramType = cleanRef(c.Schema.RefValue)
+						break
+					}
 				}
 			}
-		}
 
-		responseType := "EmptyReply"
-		if resp, ok := op.Responses["200"]; ok {
-			for _, c := range resp.Content {
-				if c.Schema.RefValue != "" {
-					responseType = cleanRef(c.Schema.RefValue)
-					break
+			responseType := "EmptyReply"
+			if resp, ok := op.Responses["200"]; ok {
+				for _, c := range resp.Content {
+					if c.Schema.RefValue != "" {
+						responseType = cleanRef(c.Schema.RefValue)
+						break
+					}
 				}
 			}
+
+			summary := op.Summary
+			if summary == "" && len(op.Tags) > 0 {
+				summary = strings.Split(op.OperationID, "_")[1] + " " + strings.Join(op.Tags, ", ")
+			}
+
+			fnName := toCamel(strings.Split(op.OperationID, "_")[1])
+			fnName = strings.ToLower(fnName[:1]) + fnName[1:]
+
+			// 创建唯一标识符，用于去重
+			uniqueKey := fmt.Sprintf("%s_%s_%s", moduleName, fnName, method)
+
+			// 如果已经处理过这个函数，跳过
+			if processedFunctions[uniqueKey] {
+				continue
+			}
+			processedFunctions[uniqueKey] = true
+
+			funcCode := renderFunction(FunctionData{
+				Summary:      summary,
+				FunctionName: fnName,
+				ParamType:    paramType,
+				ResponseType: responseType,
+				Method:       strings.ToUpper(method),
+				Path:         path,
+			}, functionTmpl)
+
+			modules[moduleName].Functions = append(modules[moduleName].Functions, funcCode)
 		}
-
-		summary := op.Summary
-		if summary == "" && len(op.Tags) > 0 {
-			summary = strings.Split(op.OperationID, "_")[1] + " " + strings.Join(op.Tags, ", ")
-		}
-
-		fnName := toCamel(strings.Split(op.OperationID, "_")[1])
-		fnName = strings.ToLower(fnName[:1]) + fnName[1:]
-
-		// 创建唯一标识符，用于去重
-		uniqueKey := fmt.Sprintf("%s_%s_%s", moduleName, fnName, method)
-
-		// 如果已经处理过这个函数，跳过
-		if processedFunctions[uniqueKey] {
-			continue
-		}
-		processedFunctions[uniqueKey] = true
-
-		funcCode := renderFunction(FunctionData{
-			Summary:      summary,
-			FunctionName: fnName,
-			ParamType:    paramType,
-			ResponseType: responseType,
-			Method:       strings.ToUpper(method),
-			Path:         path,
-		}, functionTmpl)
-
-		modules[moduleName].Functions = append(modules[moduleName].Functions, funcCode)
 	}
 
 	// 首先生成所有接口文件
