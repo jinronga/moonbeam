@@ -178,8 +178,28 @@ func main() {
 			fnName := toCamel(strings.Split(op.OperationID, "_")[1])
 			fnName = strings.ToLower(fnName[:1]) + fnName[1:]
 
-			// 创建唯一标识符，用于去重
-			uniqueKey := fmt.Sprintf("%s_%s_%s", moduleName, fnName, method)
+			// 处理重复的函数名，自动添加编号
+			originalFnName := fnName
+			counter := 1
+			for {
+				// 检查这个函数名是否已经在这个模块中被使用过
+				fnNameExists := false
+				for key := range processedFunctions {
+					if strings.HasPrefix(key, fmt.Sprintf("%s_%s_", moduleName, fnName)) {
+						fnNameExists = true
+						break
+					}
+				}
+				if !fnNameExists {
+					break
+				}
+				// 如果存在，添加编号
+				counter++
+				fnName = fmt.Sprintf("%s%d", originalFnName, counter)
+			}
+
+			// 创建唯一标识符，用于去重 - 使用路径和操作ID的组合
+			uniqueKey := fmt.Sprintf("%s_%s_%s_%s", moduleName, fnName, method, path)
 
 			// 如果已经处理过这个函数，跳过
 			if processedFunctions[uniqueKey] {
