@@ -97,6 +97,8 @@ func main() {
 	// 按模块组织数据
 	modules := make(map[string]*ModuleData)
 	interfacesByModule := make(map[string]map[string]string) // module -> interfaceName -> interfaceCode
+	functionsByModule := make(map[string]map[string]string)  // module -> functionName -> functionCode
+	functionOrder := make(map[string]int)                    // 记录函数处理顺序
 
 	// 处理所有接口定义
 	for name, schema := range api.Components.Schemas {
@@ -120,8 +122,17 @@ func main() {
 
 	// 处理所有API路径
 	processedFunctions := make(map[string]bool) // 用于去重
+	globalOrder := 0                            // 全局处理顺序计数器
 
-	for path, pathItem := range api.Paths {
+	// 先对路径进行排序，确保处理顺序的一致性
+	var sortedPaths []string
+	for path := range api.Paths {
+		sortedPaths = append(sortedPaths, path)
+	}
+	sort.Strings(sortedPaths)
+
+	for _, path := range sortedPaths {
+		pathItem := api.Paths[path]
 		// 处理所有HTTP方法，而不是只处理第一个
 		operations := []struct {
 			op     *Operation
@@ -148,6 +159,11 @@ func main() {
 			moduleName := getModuleName(op.Tags)
 			if _, exists := modules[moduleName]; !exists {
 				modules[moduleName] = &ModuleData{Name: moduleName}
+			}
+
+			// 初始化函数映射
+			if _, exists := functionsByModule[moduleName]; !exists {
+				functionsByModule[moduleName] = make(map[string]string)
 			}
 
 			paramType := "EmptyRequest"
@@ -216,7 +232,12 @@ func main() {
 				Path:         path,
 			}, functionTmpl)
 
-			modules[moduleName].Functions = append(modules[moduleName].Functions, funcCode)
+			// 将函数代码存储到临时映射中，使用函数名作为键
+			functionsByModule[moduleName][fnName] = funcCode
+
+			// 记录函数处理顺序，确保相同 OperationID 的接口按处理顺序排列
+			globalOrder++
+			functionOrder[fnName] = globalOrder
 		}
 	}
 
@@ -344,6 +365,47 @@ func main() {
 					}
 				}
 			}
+		}
+	}
+
+	// 将临时映射中的函数按名称排序后添加到模块中
+	for moduleName, functions := range functionsByModule {
+		if _, exists := modules[moduleName]; !exists {
+			modules[moduleName] = &ModuleData{Name: moduleName}
+		}
+
+		// 创建排序后的函数名称列表
+		// 使用函数名和顺序号的组合来排序，确保相同 OperationID 的接口按处理顺序排列
+		type functionSortItem struct {
+			name  string
+			order int
+		}
+
+		var functionSortItems []functionSortItem
+		for functionName := range functions {
+			order := functionOrder[functionName]
+			functionSortItems = append(functionSortItems, functionSortItem{
+				name:  functionName,
+				order: order,
+			})
+		}
+
+		// 按函数名排序，如果函数名相同则按处理顺序排序
+		sort.Slice(functionSortItems, func(i, j int) bool {
+			if functionSortItems[i].name == functionSortItems[j].name {
+				return functionSortItems[i].order < functionSortItems[j].order
+			}
+			return functionSortItems[i].name < functionSortItems[j].name
+		})
+
+		var sortedFunctionNames []string
+		for _, item := range functionSortItems {
+			sortedFunctionNames = append(sortedFunctionNames, item.name)
+		}
+
+		// 按排序后的顺序添加函数到模块中
+		for _, functionName := range sortedFunctionNames {
+			modules[moduleName].Functions = append(modules[moduleName].Functions, functions[functionName])
 		}
 	}
 

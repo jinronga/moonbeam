@@ -65,6 +65,7 @@ type AdditionalPropertiesSchema struct {
 
 type Ref struct {
 	RefValue string `yaml:"$ref"`
+	Type     string `yaml:"type"`
 }
 
 func ParseOpenAPI(data []byte) (*OpenAPI, error) {
@@ -108,13 +109,32 @@ func (p Property) TypeName() string {
 		return typeName
 	}
 	if p.Type == "array" && p.Items != nil {
-		typeName := cleanRef(p.Items.RefValue)
-		// 清理命名空间前缀
-		if strings.Contains(typeName, ".") {
-			parts := strings.Split(typeName, ".")
-			typeName = parts[len(parts)-1]
+		// 处理引用类型
+		if p.Items.RefValue != "" {
+			typeName := cleanRef(p.Items.RefValue)
+			// 清理命名空间前缀
+			if strings.Contains(typeName, ".") {
+				parts := strings.Split(typeName, ".")
+				typeName = parts[len(parts)-1]
+			}
+			return typeName + "[]"
 		}
-		return typeName + "[]"
+		// 处理普通类型
+		if p.Items.Type != "" {
+			switch p.Items.Type {
+			case "string":
+				return "string[]"
+			case "integer":
+				return "number[]"
+			case "number":
+				return "number[]"
+			case "boolean":
+				return "boolean[]"
+			default:
+				return "any[]"
+			}
+		}
+		return "any[]"
 	}
 	if p.Type == "object" && p.AdditionalProperties != nil && p.AdditionalProperties.Type == "string" {
 		return "{ [key: string]: string }"
