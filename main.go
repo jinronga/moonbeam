@@ -100,6 +100,15 @@ func main() {
 	functionsByModule := make(map[string]map[string]string)  // module -> functionName -> functionCode
 	functionOrder := make(map[string]int)                    // 记录函数处理顺序
 
+	// 缓存所有枚举类型
+	enumTypes := make(map[string]bool)
+	for name, schema := range api.Components.Schemas {
+		if len(schema.Enum) > 0 {
+			// 只存储原始名称，保持完整的 ref 名称
+			enumTypes[name] = true
+		}
+	}
+
 	// 处理所有接口定义
 	for name, schema := range api.Components.Schemas {
 		moduleName := getModuleFromSchemaName(name)
@@ -113,7 +122,7 @@ func main() {
 		}
 
 		// 生成接口代码
-		interfaceCode := renderInterface(name, schema, interfaceDefTmpl)
+		interfaceCode := renderInterface(name, schema, interfaceDefTmpl, enumTypes)
 		// 只有当接口代码不为空时才添加到映射中
 		if interfaceCode != "" {
 			interfacesByModule[moduleName][name] = interfaceCode
@@ -259,7 +268,7 @@ func main() {
 		// 生成接口文件
 		var usedEnums []string
 		if moduleName == "types" {
-			usedEnums = extractUsedEnums(interfaces)
+			usedEnums = extractUsedEnums(interfaces, enumTypes)
 		}
 
 		// 创建排序后的接口名称列表
@@ -308,21 +317,7 @@ func main() {
 				}
 
 				typeName := cleanRef("#/" + name)
-				// 清理命名空间前缀
-				if strings.Contains(typeName, ".") {
-					parts := strings.Split(typeName, ".")
-					typeName = parts[len(parts)-1]
-				}
-
-				// 检查是否为带前缀的枚举类型，如果是则映射到真正的枚举类型
-				if strings.Contains(typeName, "_") {
-					parts := strings.Split(typeName, "_")
-					lastPart := parts[len(parts)-1]
-					// 检查最后一部分是否为已知的枚举类型
-					if isEnumType(lastPart) {
-						typeName = lastPart
-					}
-				}
+				// 对于枚举类型，保持完整的 ref 名称，不进行简化
 
 				// 对枚举值进行排序
 				sort.Strings(enumValues)
@@ -514,7 +509,13 @@ type RootIndexData struct {
 	Modules map[string]*ModuleData
 }
 
-func renderInterface(schemaName string, schema Schema, tmpl *template.Template) string {
+type ProcessedProperty struct {
+	Property   Property
+	TypeName   string
+	IsRequired bool
+}
+
+func renderInterface(schemaName string, schema Schema, tmpl *template.Template, enumTypes map[string]bool) string {
 	// 提取接口名称，不包含命名空间前缀
 	typeName := cleanRef("#/" + schemaName)
 	// 如果typeName包含点号，只取最后一部分
@@ -537,17 +538,24 @@ func renderInterface(schemaName string, schema Schema, tmpl *template.Template) 
 		properties = make(map[string]Property)
 	}
 
-	// 直接使用原始的Properties，让Property.TypeName()方法处理类型名称映射
-	cleanProperties := properties
+	// 预处理所有属性的类型名称
+	processedProperties := make(map[string]ProcessedProperty)
+	for key, prop := range properties {
+		processedProperties[key] = ProcessedProperty{
+			Property:   prop,
+			TypeName:   prop.TypeName(enumTypes),
+			IsRequired: prop.IsRequired(),
+		}
+	}
 
 	data := struct {
 		SchemaName string
 		TypeName   string
-		Properties map[string]Property
+		Properties map[string]ProcessedProperty
 	}{
 		SchemaName: schemaName,
 		TypeName:   typeName,
-		Properties: cleanProperties,
+		Properties: processedProperties,
 	}
 	tmpl.Execute(&buf, data)
 	return buf.String()
@@ -665,53 +673,23 @@ func generateImports(moduleName string, interfacesByModule map[string]map[string
 
 // extractUsedTypes 从函数代码中提取使用的类型名称
 // extractUsedEnums 从接口代码中提取使用的枚举类型
-func extractUsedEnums(interfaces map[string]string) []string {
-	// 定义枚举类型名称到实际枚举类型的映射
-	enumMappings := map[string]string{
-		"AlertStatus":            "AlertStatus",
-		"ConditionMetric":        "ConditionMetric",
-		"DatasourceDriverMetric": "DatasourceDriverMetric",
-		"DatasourceType":         "DatasourceType",
-		"DictType":               "DictType",
-		"Environment":            "Environment",
-		"Gender":                 "Gender",
-		"GlobalStatus":           "GlobalStatus",
-		"HTTPMethod":             "HTTPMethod",
-		"HookAPP":                "HookAPP",
-		"MenuProcessType":        "MenuProcessType",
-		"KnownRegex":             "KnownRegex",
-		"OperateType":            "OperateType",
-		"Network":                "Network",
-		"I18nFormat":             "I18nFormat",
-		"MemberPosition":         "MemberPosition",
-		"MenuCategory":           "MenuCategory",
-		"TeamAuditStatus":        "TeamAuditStatus",
-		"NoticeType":             "NoticeType",
-		"SMSProviderType":        "SMSProviderType",
-		"MenuType":               "MenuType",
-		"StrategyType":           "StrategyType",
-		"UserStatus":             "UserStatus",
-		"RegistryDriver":         "RegistryDriver",
-		"SampleMode":             "SampleMode",
-		"SendMessageStatus":      "SendMessageStatus",
-		"TeamAuditAction":        "TeamAuditAction",
-		"TimeEngineRuleType":     "TimeEngineRuleType",
-		"MessageType":            "MessageType",
-		"TeamStatus":             "TeamStatus",
-		"UserPosition":           "UserPosition",
-		"MemberStatus":           "MemberStatus",
-		"ServerType":             "ServerType",
-	}
-
+func extractUsedEnums(interfaces map[string]string, enumTypes map[string]bool) []string {
 	usedEnums := make(map[string]bool)
 
-	// 遍历所有接口代码，查找使用的枚举
+	// 遍历所有接口代码，查找使用的枚举类型
 	for _, code := range interfaces {
-		for _, enumName := range enumMappings {
-			// 使用简单的字符串包含检查，查找包含枚举名称的类型
-			// 这样可以匹配到如 AlertItem_AlertStatus 这样的类型名称
-			if strings.Contains(code, enumName) {
-				usedEnums[enumName] = true
+		// 使用正则表达式匹配类型定义中的枚举类型
+		// 匹配模式：fieldName?: EnumTypeName 或 fieldName?: EnumTypeName[]
+		re := regexp.MustCompile(`\w+\??:\s*([A-Z][a-zA-Z_]*)(?:\[\])?`)
+		matches := re.FindAllStringSubmatch(code, -1)
+
+		for _, match := range matches {
+			if len(match) > 1 {
+				typeName := match[1]
+				// 检查是否为真正的枚举类型
+				if enumTypes[typeName] {
+					usedEnums[typeName] = true
+				}
 			}
 		}
 	}
