@@ -22,9 +22,10 @@ type PathItem struct {
 }
 
 type Operation struct {
-	Tags        []string `yaml:"tags"`
-	Summary     string   `yaml:"summary"`
-	OperationID string   `yaml:"operationId"`
+	Tags        []string    `yaml:"tags"`
+	Summary     string      `yaml:"summary"`
+	OperationID string      `yaml:"operationId"`
+	Parameters  []Parameter `yaml:"parameters"`
 	RequestBody *struct {
 		Content map[string]struct {
 			Schema Ref `yaml:"schema"`
@@ -61,6 +62,18 @@ type Property struct {
 
 type AdditionalPropertiesSchema struct {
 	Type string `yaml:"type"`
+}
+
+type Parameter struct {
+	Name        string `yaml:"name"`
+	In          string `yaml:"in"`
+	Description string `yaml:"description"`
+	Required    bool   `yaml:"required"`
+	Schema      struct {
+		Type   string `yaml:"type"`
+		Format string `yaml:"format"`
+		Ref    string `yaml:"$ref"`
+	} `yaml:"schema"`
 }
 
 type Ref struct {

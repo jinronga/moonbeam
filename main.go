@@ -140,6 +140,47 @@ func main() {
 	}
 	sort.Strings(sortedPaths)
 
+	// 为有查询参数的请求生成请求类型（GET, DELETE 等）
+	generatedRequestTypes := make(map[string]bool)
+	for _, path := range sortedPaths {
+		pathItem := api.Paths[path]
+
+		// 处理所有HTTP方法的查询参数
+		operations := []struct {
+			op     *Operation
+			method string
+		}{
+			{pathItem.Get, "GET"},
+			{pathItem.Delete, "DELETE"},
+			{pathItem.Put, "PUT"},
+			{pathItem.Post, "POST"},
+		}
+
+		for _, opData := range operations {
+			if opData.op == nil || len(opData.op.Parameters) == 0 {
+				continue
+			}
+
+			// 只处理有查询参数的请求，且没有 RequestBody 的请求
+			if opData.op.RequestBody == nil {
+				requestTypeName := generateRequestTypeFromParameters(opData.op.Parameters, opData.op.OperationID)
+				if requestTypeName != "EmptyRequest" && !generatedRequestTypes[requestTypeName] {
+					generatedRequestTypes[requestTypeName] = true
+
+					// 生成请求类型接口
+					requestInterface := generateRequestInterfaceFromParameters(requestTypeName, opData.op.Parameters)
+					if requestInterface != "" {
+						moduleName := getModuleFromSchemaName("types")
+						if _, exists := interfacesByModule[moduleName]; !exists {
+							interfacesByModule[moduleName] = make(map[string]string)
+						}
+						interfacesByModule[moduleName][requestTypeName] = requestInterface
+					}
+				}
+			}
+		}
+	}
+
 	for _, path := range sortedPaths {
 		pathItem := api.Paths[path]
 		// 处理所有HTTP方法，而不是只处理第一个
@@ -176,6 +217,8 @@ func main() {
 			}
 
 			paramType := "EmptyRequest"
+
+			// 优先处理 RequestBody（POST/PUT 请求）
 			if op.RequestBody != nil {
 				for _, c := range op.RequestBody.Content {
 					if c.Schema.RefValue != "" {
@@ -183,6 +226,9 @@ func main() {
 						break
 					}
 				}
+			} else if len(op.Parameters) > 0 {
+				// 处理 Parameters（GET 请求的查询参数）
+				paramType = generateRequestTypeFromParameters(op.Parameters, op.OperationID)
 			}
 
 			responseType := "EmptyReply"
@@ -732,4 +778,80 @@ func extractUsedTypes(funcCode string, usedInterfaces map[string]bool) {
 		usedInterfaces[paramType] = true
 		usedInterfaces[returnType] = true
 	}
+}
+
+// generateRequestTypeFromParameters 根据参数生成请求类型名称
+func generateRequestTypeFromParameters(parameters []Parameter, operationID string) string {
+	if len(parameters) == 0 {
+		return "EmptyRequest"
+	}
+
+	// 从 operationID 中提取操作名称，例如 "Team_GetTeamRole" -> "GetTeamRole"
+	parts := strings.Split(operationID, "_")
+	if len(parts) < 2 {
+		return "EmptyRequest"
+	}
+
+	operationName := parts[1]
+	return operationName + "Request"
+}
+
+// generateRequestInterfaceFromParameters 根据参数生成请求接口代码
+func generateRequestInterfaceFromParameters(typeName string, parameters []Parameter) string {
+	if len(parameters) == 0 {
+		return ""
+	}
+
+	var properties []string
+	for _, param := range parameters {
+		if param.In != "query" {
+			continue // 只处理查询参数
+		}
+
+		// 确定 TypeScript 类型
+		var tsType string
+		if param.Schema.Ref != "" {
+			tsType = cleanRef(param.Schema.Ref)
+		} else {
+			switch param.Schema.Type {
+			case "string":
+				tsType = "string"
+			case "integer", "number":
+				tsType = "number"
+			case "boolean":
+				tsType = "boolean"
+			default:
+				tsType = "any"
+			}
+		}
+
+		// 生成属性定义
+		optional := "?"
+		if param.Required {
+			optional = ""
+		}
+
+		description := ""
+		if param.Description != "" {
+			description = fmt.Sprintf("  /**\n   * %s\n   */\n  ", param.Description)
+		}
+
+		// 处理属性名中的点号，转换为下划线
+		propertyName := strings.ReplaceAll(param.Name, ".", "_")
+		property := fmt.Sprintf("%s%s%s: %s", description, propertyName, optional, tsType)
+		properties = append(properties, property)
+	}
+
+	if len(properties) == 0 {
+		return ""
+	}
+
+	// 生成完整的接口代码
+	interfaceCode := fmt.Sprintf("/**\n * %s\n */\nexport interface %s {\n", typeName, typeName)
+	for _, prop := range properties {
+		interfaceCode += fmt.Sprintf("  %s\n", prop)
+	}
+	interfaceCode += "}\n"
+
+	return interfaceCode
 }
